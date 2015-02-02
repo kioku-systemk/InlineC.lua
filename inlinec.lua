@@ -116,7 +116,7 @@ local function getCompilerPath()
 	elseif myPlatform == 'Darwin' then
 		return 'clang -O2'
 	else
-		return 'g++ -O2'
+		return 'gcc -O2'
 	end
 end
 
