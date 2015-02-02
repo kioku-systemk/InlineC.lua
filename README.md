@@ -2,7 +2,7 @@
 
 Inline C Library at Lua
 
-##Usage:
+##Usage
 
     local CC = require "inlinec"
     local f = CC.compile [[
@@ -18,14 +18,14 @@ Inline C Library at Lua
     
     Hello from C
 
-## Environment:
+## Environment
 
-* MacOSX + Xcode (Commandline tools)
+* OSX + Xcode (with Command line tools)
 * Windows + VisualStudio 2013
 * Linux + gcc
 
 
-## Original Idea and base code:
+## Original Idea and base code
 
    (c) D.Manura, 2008.
    Licensed under the same terms as Lua itself (MIT license).
@@ -33,7 +33,7 @@ Inline C Library at Lua
    http://lua-users.org/wiki/InlineCee
 
 
-# Lisence
+## Lisence
 
    (c) Kentaro Oku
    Licensed under the same terms as Lua itself (MIT license).
