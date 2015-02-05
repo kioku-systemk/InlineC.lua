@@ -10,7 +10,7 @@
 --
 
 local luaIncludePathWin      = [[C:\Lua\include]]
-local luaLibraryPathWin      = [[C:\Lua\lib]
+local luaLibraryPathWin      = [[C:\Lua\lib]]
 local luaIncludePathMacLinux = [[/usr/local/include]]
 local luaLibraryPathMacLinux = [[/usr/local/lib]]
 local startFuncName          = 'start'             -- Ex. DLLAPI int start(lua_State * L) 
