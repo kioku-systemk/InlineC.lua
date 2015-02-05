@@ -10,7 +10,7 @@
 --
 
 local luaIncludePathWin      = [[C:\Lua\include]]
-local luaLibraryPathWin      = [[C:\Lua]]
+local luaLibraryPathWin      = [[C:\Lua\lib]
 local luaIncludePathMacLinux = [[/usr/local/include]]
 local luaLibraryPathMacLinux = [[/usr/local/lib]]
 local startFuncName          = 'start'             -- Ex. DLLAPI int start(lua_State * L) 
@@ -101,18 +101,23 @@ end
 
 -- Execute command.
 local function exec(cmd)
-  if M.debug then print(cmd) end
-  os.execute(cmd)
-  --assert(os.execute(cmd) == 0, 'command failed')
-end
+	if (M.debug == true) then print(cmd) end
+	local handle = io.popen(cmd)
+	local ret = handle:read('*a')
+	handle:close()
+	if (M.debug == true) then print(ret) end
+	return ret
+ end
 
 local function getCompilerPath()
 	if myPlatform == 'Windows' then
-		local workingdir = 'cd ' .. os.getenv('TMP')
-		local vcpath = '\"' .. os.getenv('VS120COMNTOOLS').. '..\\..\\VC\\vcvarsall.bat\" >nul ' .. bitModeWin .. ' &'
-		vcpath = vcpath .. workingdir .. '&'
-		vcpath = vcpath .. 'cl /nologo /EHsc /MD /O2 /D_WIN32=1'
-		return vcpath
+		-- Generate compiler bat
+		local batfile = '@call "' .. os.getenv('VS120COMNTOOLS') .. '..\\..\\VC\\vcvarsall.bat" ' .. '\n'
+		batfile = batfile .. '@cd ' .. os.getenv('TMP') .. '\n'
+		batfile = batfile .. '@cl /nologo /EHsc /MD /O2 /D_WIN32=1 %1 %2 %3 %4 %5 %6 %7 %8 %9'
+		local tempbat = make_temp_file(batfile, 'bat')
+		return tempbat
+		
 	elseif myPlatform == 'Darwin' then
 		return 'clang -O2'
 	else
@@ -184,7 +189,7 @@ local function compile(src)
   
   local incOption = getIncludeOption()
   local libOption = getLibraryOption()
-  local CC = cpp .. ' ' .. incOption    --' -I/usr/local/include -L/usr/local/lib'
+  local CC = cpp .. ' ' .. incOption
 
   local pre_filename = make_preamble()
   src = ('#include %q\n'):format(pre_filename) .. src
@@ -198,16 +203,12 @@ local function compile(src)
   local outoption = getOutOption()
   local luaoption = getLuaOption()
   local cmd = CC .. " " .. dlloption
-		cmd = cmd .. " " .. srcname
-		
+        cmd = cmd .. " " .. srcname
+
   local lnkCmd = getLinkerOption() .. ' ' .. luaoption .. ' ' .. libOption .. ' ' .. outoption .. modname
   cmd = cmd .. " " .. lnkCmd
-  if myPlatform == 'Windows' and not M.debug then
-	cmd = cmd .. " >nul"
-  end
-
   exec(cmd)
-
+	
   local func = assert(package.loadlib(modname, startFuncName))
   return func, modname
 end
