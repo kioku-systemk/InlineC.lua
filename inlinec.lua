@@ -22,18 +22,36 @@ M.debug = false
 
 local preamble = [[
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <lua.h>
 #include <lauxlib.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
 #ifndef DLLAPI
+
+#ifdef __cplusplus
+#define DLLAPI extern "C" __declspec(dllexport)
+#else
 #define DLLAPI __declspec(dllexport)
 #endif
+
+#endif
+#else   /* Win32 */
+
+#ifdef __cplusplus
+#define DLLAPI extern "C"
 #else
 #define DLLAPI
+#endif
+
 #endif
 
 ]]
@@ -109,7 +127,7 @@ local function exec(cmd)
 	return ret
  end
 
-local function getCompilerPath()
+local function getCompilerPath(ext)
 	if myPlatform == 'Windows' then
 		-- Generate compiler bat
 		local batfile = '@call "' .. os.getenv('VS120COMNTOOLS') .. '..\\..\\VC\\vcvarsall.bat" ' .. '\n'
@@ -117,11 +135,20 @@ local function getCompilerPath()
 		batfile = batfile .. '@cl /nologo /EHsc /MD /O2 /D_WIN32=1 %1 %2 %3 %4 %5 %6 %7 %8 %9'
 		local tempbat = make_temp_file(batfile, 'bat')
 		return tempbat
-		
+
 	elseif myPlatform == 'Darwin' then
-		return 'clang -O2'
+		if ext == 'cpp' then
+			return 'clang++ -O2'
+		else
+			return 'clang -O2'
+		end
+
 	else
-		return 'gcc -O2'
+		if ext == 'cpp' then
+			return 'g++ -O2'
+		else
+			return 'gcc -O2'
+		end
 	end
 end
 
@@ -184,8 +211,8 @@ end
 
 -- Compile C source, returning corresponding Lua function.
 -- Function must be named 'start' in C.
-local function compile(src)
-  local cpp = getCompilerPath()
+local function compileExt(src, ext)
+  local cpp = getCompilerPath(ext)
   
   local incOption = getIncludeOption()
   local libOption = getLibraryOption()
@@ -198,7 +225,7 @@ local function compile(src)
   local dllExt = getDllExt()
   local modname = getTempFileName(dllExt)
 
-  local srcname = make_temp_file(src, "c")
+  local srcname = make_temp_file(src, ext)
   local dlloption = getDllOption()
   local outoption = getOutOption()
   local luaoption = getLuaOption()
@@ -212,6 +239,22 @@ local function compile(src)
   local func = assert(package.loadlib(modname, startFuncName))
   return func, modname
 end
-M.compile = compile
+local function compile(src)
+	return compileExt(src, "c")
+end
+local function compile_cpp(src)
+	return compileExt(src, "cpp")
+end
+
+local function addIncludePath(path)
+end
+
+local function addLibraryPath(path)
+end
+
+M.compile     = compile
+M.compile_cpp = compile_cpp
+--M.addIncludePath = addIncludePath
+--M.addLibraryPath = addLibraryPath
 
 return M
