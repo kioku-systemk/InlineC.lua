@@ -18,6 +18,26 @@ Inline C Library at Lua
     
     Hello from C
 
+
+##Usage2
+
+    local CC = require "inlinec"
+    CC.debug = true
+
+    local f;
+    local modname
+    f, modname = CC.compile_cpp [[
+      #include <iostream>
+      DLLAPI int start(lua_State * L) {
+        std::cout << "Hello from C++" << std::endl;
+        return 0;
+      }
+    ]]
+
+    print(modname)
+    print(f())  --> "Hello from C++"
+
+
 ## Environment
 
 * OSX + Xcode (with Command line tools)
