@@ -1,6 +1,6 @@
 -- inlinec.lua
 --
--- Cross platform Inline C Library
+-- Cross platform Inline C/Cpp Library
 --   modified by kioku / System K
 --
 -- Original by
@@ -11,10 +11,22 @@
 
 local luaIncludePathWin      = [[C:\Lua\include]]
 local luaLibraryPathWin      = [[C:\Lua\lib]]
+local luaLinkOptionWin       = [[lua52.lib]]
 local luaIncludePathMacLinux = [[/usr/local/include]]
 local luaLibraryPathMacLinux = [[/usr/local/lib]]
-local startFuncName          = 'start'             -- Ex. DLLAPI int start(lua_State * L) 
-local bitModeWin             = 'x64' -- or x86
+local luaLinkOptionMacLinux  = [[-llua]]
+local startFuncName          = 'start'             -- Ex. DLLAPI int start(lua_State * L)
+local bitModeWin             = 'x86_amd64'
+--[[
+	About bitModeWin 
+	'x86'       = [32bit compile]
+	'x86_amd64' = [32bit->64bit cross compile]
+	'amd64'     = [64bit compile]
+--]]
+
+local includePath = {}
+local libraryPath = {}
+local linkOption  = {}
 
 local M = {}
 
@@ -27,8 +39,6 @@ extern "C" {
 #endif
 #include <lua.h>
 #include <lauxlib.h>
-#include <stdio.h>
-#include <stdlib.h>
 #ifdef __cplusplus
 }
 #endif
@@ -44,12 +54,12 @@ extern "C" {
 #endif
 
 #endif
-#else   /* Win32 */
+#else   /* Linux, Mac */
 
 #ifdef __cplusplus
-#define DLLAPI extern "C"
+#define DLLAPI extern "C" __attribute__ ((visibility("default")))
 #else
-#define DLLAPI
+#define DLLAPI __attribute__ ((visibility("default")))
 #endif
 
 #endif
@@ -62,25 +72,26 @@ local function numlines(s)
 end
 
 local function getPlatform()
-    --- command capture
-    function captureRedirectErr(cmd)
-        local f = assert(io.popen(cmd .. ' 2>&1' , 'r'))
-        local s = assert(f:read('*a'))
-        f:close()
-        s = string.gsub(s, '^%s+', '')
-        s = string.gsub(s, '%s+$', '')
-        s = string.gsub(s, '[\n\r]+', ' ')
-        return s
-    end
-    local plf = captureRedirectErr('uname')
-    if string.sub(plf,1,8) == "'uname' " then -- not found 'uname' cmd
-        return 'Windows'
-    else
-        return plf -- 'Darwin', 'Linux'
-    end
+	--- command capture
+	function captureRedirectErr(cmd)
+		local f = assert(io.popen(cmd .. ' 2>&1' , 'r'))
+		local s = assert(f:read('*a'))
+		f:close()
+		s = string.gsub(s, '^%s+', '')
+		s = string.gsub(s, '%s+$', '')
+		s = string.gsub(s, '[\n\r]+', ' ')
+		return s
+	end
+	if package.config:sub(1,1) == "\\" then
+		return 'Windows'
+	else
+		local plf = captureRedirectErr('uname')
+		return plf -- 'Darwin', 'Linux'
+	end
 end
 
 local myPlatform = getPlatform()
+print('Platform = ', myPlatform)
 
 local function getTempFileName(ext)
 	local t = os.tmpname() .. '.' .. ext
@@ -130,9 +141,16 @@ local function exec(cmd)
 local function getCompilerPath(ext)
 	if myPlatform == 'Windows' then
 		-- Generate compiler bat
-		local batfile = '@call "' .. os.getenv('VS120COMNTOOLS') .. '..\\..\\VC\\vcvarsall.bat" ' .. '\n'
+		local batfile =      '@call "' .. os.getenv('VS120COMNTOOLS') .. '..\\..\\VC\\vcvarsall.bat" ' .. bitModeWin .. '\n'
 		batfile = batfile .. '@cd ' .. os.getenv('TMP') .. '\n'
-		batfile = batfile .. '@cl /nologo /EHsc /MD /O2 /D_WIN32=1 %1 %2 %3 %4 %5 %6 %7 %8 %9'
+		batfile = batfile .. '@set ARGS=' .. '\n'
+		batfile = batfile .. '@:check' .. '\n'
+		batfile = batfile .. '@if "%1"=="" goto final' .. '\n'
+		batfile = batfile .. '@set ARGS=%ARGS% %1' .. '\n'
+		batfile = batfile .. '@shift' .. '\n'
+		batfile = batfile .. '@goto check' .. '\n'
+		batfile = batfile .. '@:final' .. '\n'
+		batfile = batfile .. '@cl /nologo /EHsc /MD /O2 /D_WIN32=1 %ARGS%' .. '\n'
 		local tempbat = make_temp_file(batfile, 'bat')
 		return tempbat
 
@@ -177,28 +195,47 @@ local function getOutOption()
 	end
 end
 
-local function getLuaOption()
-	if myPlatform == 'Windows' then
-		return 'lua52.lib '
-	else
-		return '-llua '
+local function getLinkLibOption()
+	local i
+	local v
+	local lnk = ""
+	local lnkOpt
+	for i,v in pairs(linkOption) do
+		lnk = lnk .. v .. ' '
 	end
+	return lnk
 end
 
 local function getIncludeOption()
+	local i
+	local v
+	local inc = ""
+	local incOpt
 	if myPlatform == 'Windows' then
-		return '/I' .. luaIncludePathWin
+		incOpt = '/I'
 	else
-		return '-I' .. luaIncludePathMacLinux
+		incOpt = '-I'
 	end
+	for i,v in pairs(includePath) do
+		inc = inc .. incOpt .. v .. ' '
+	end
+	return inc
 end
 
 local function getLibraryOption()
+	local i
+	local v
+	local lib = ""
+	local libOpt
 	if myPlatform == 'Windows' then
-		return '/LIBPATH:' .. luaLibraryPathWin
+		libOpt = '/LIBPATH:'
 	else
-		return '-L' .. luaLibraryPathMacLinux
+		libOpt = '-L'
 	end
+	for i,v in pairs(libraryPath) do
+		lib = lib .. libOpt .. v .. ' '
+	end
+	return lib
 end
 
 local function getDllExt()
@@ -212,32 +249,33 @@ end
 -- Compile C source, returning corresponding Lua function.
 -- Function must be named 'start' in C.
 local function compileExt(src, ext)
-  local cpp = getCompilerPath(ext)
-  
-  local incOption = getIncludeOption()
-  local libOption = getLibraryOption()
-  local CC = cpp .. ' ' .. incOption
+	local cpp = getCompilerPath(ext)
 
-  local pre_filename = make_preamble()
-  src = ('#include %q\n'):format(pre_filename) .. src
-  src = adjustlines(src, 2, 1)
+	local incOption = getIncludeOption()
+	local libOption = getLibraryOption()
+	local CC = cpp .. ' ' .. incOption
 
-  local dllExt = getDllExt()
-  local modname = getTempFileName(dllExt)
+	local pre_filename = make_preamble()
+	src = ('#include %q\n'):format(pre_filename) .. src
+	src = adjustlines(src, 2, 1)
 
-  local srcname = make_temp_file(src, ext)
-  local dlloption = getDllOption()
-  local outoption = getOutOption()
-  local luaoption = getLuaOption()
-  local cmd = CC .. " " .. dlloption
-        cmd = cmd .. " " .. srcname
+	local dllExt = getDllExt()
+	local modname = getTempFileName(dllExt)
 
-  local lnkCmd = getLinkerOption() .. ' ' .. luaoption .. ' ' .. libOption .. ' ' .. outoption .. modname
-  cmd = cmd .. " " .. lnkCmd
-  exec(cmd)
-	
-  local func = assert(package.loadlib(modname, startFuncName))
-  return func, modname
+	local srcname = make_temp_file(src, ext)
+	local dlloption = getDllOption()
+	local outoption = getOutOption()
+	local lnkoption = getLinkLibOption()
+	local cmd = CC .. " " .. dlloption
+		cmd = cmd .. " " .. srcname
+
+	local lnkCmd = getLinkerOption() .. ' ' .. lnkoption .. ' ' .. libOption .. ' ' .. outoption .. modname
+	cmd = cmd .. " " .. lnkCmd
+	exec(cmd)
+
+	--print(modname, startFuncName)
+	local func = assert(package.loadlib(modname, startFuncName))
+	return func, modname
 end
 local function compile(src)
 	return compileExt(src, "c")
@@ -246,15 +284,77 @@ local function compile_cpp(src)
 	return compileExt(src, "cpp")
 end
 
+-----------
+
 local function addIncludePath(path)
+	includePath[#includePath + 1] = path
 end
 
 local function addLibraryPath(path)
+	libraryPath[#libraryPath + 1] = path
 end
 
-M.compile     = compile
-M.compile_cpp = compile_cpp
---M.addIncludePath = addIncludePath
---M.addLibraryPath = addLibraryPath
+local function addLinkOption(opt)
+	linkOption[#linkOption + 1] = opt
+end
+
+-----------
+
+local function getIncludePath()
+	return includePath
+end
+
+local function getLibraryPath()
+	return libraryPath
+end
+
+local function getLinkOption()
+	return linkOption
+end
+
+-----------
+
+local function setIncludePath(path_table)
+	includePath = path_table
+end
+
+local function setLibraryPath(path_table)
+	libraryPath = path_table
+end
+
+local function setLinkOption(opt_table)
+	linkOption = opt_table
+end
+
+------------
+
+if myPlatform == 'Windows' then
+	includePath[1] = luaIncludePathWin
+	libraryPath[1] = luaLibraryPathWin
+	linkOption [1] = luaLinkOptionWin
+else
+	includePath[1] = luaIncludePathMacLinux
+	libraryPath[1] = luaLibraryPathMacLinux
+	linkOption [1] = luaLinkOptionMacLinux
+end
+
+
+------------
+
+M.compile        = compile
+M.compile_cpp    = compile_cpp
+
+M.addIncludePath = addIncludePath
+M.addLibraryPath = addLibraryPath
+M.addLinkOption  = addLinkOption
+
+M.getIncludePath = getIncludePath
+M.getLibraryPath = getLibraryPath
+M.getLinkOption  = getLinkOption
+
+M.setIncludePath = setIncludePath
+M.setLibraryPath = setLibraryPath
+M.setLinkOption  = setLinkOption
+
 
 return M
