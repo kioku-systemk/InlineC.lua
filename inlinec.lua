@@ -74,8 +74,9 @@ end
 local function getPlatform()
 	--- command capture
 	function captureRedirectErr(cmd)
-		local f = assert(io.popen(cmd .. ' 2>&1' , 'r'))
-		local s = assert(f:read('*a'))
+		--local f = assert(io.popen(cmd .. ' 2>&1' , 'r'))
+		local f = assert(io.popen(cmd, 'r'))
+		local s = assert(f:read('*all'))
 		f:close()
 		s = string.gsub(s, '^%s+', '')
 		s = string.gsub(s, '%s+$', '')
@@ -91,7 +92,7 @@ local function getPlatform()
 end
 
 local myPlatform = getPlatform()
-print('Platform = ', myPlatform)
+--print('Platform = ', myPlatform)
 
 local function getTempFileName(ext)
 	local t = os.tmpname() .. '.' .. ext
@@ -132,7 +133,7 @@ end
 local function exec(cmd)
 	if (M.debug == true) then print(cmd) end
 	local handle = io.popen(cmd)
-	local ret = handle:read('*a')
+	local ret = handle:read('*all')
 	handle:close()
 	if (M.debug == true) then print(ret) end
 	return ret
