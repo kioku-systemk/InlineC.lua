@@ -271,7 +271,7 @@ local function compileExt(src, ext)
 		cmd = cmd .. " " .. srcname
 
 	local lnkCmd = getLinkerOption() .. ' ' .. lnkoption .. ' ' .. libOption .. ' ' .. outoption .. modname
-	cmd = cmd .. " " .. lnkCmd
+	cmd = cmd .. " " .. lnkCmd .. ' 2>&1'
 	exec(cmd)
 
 	--print(modname, startFuncName)
